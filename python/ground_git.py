@@ -1,330 +1,27 @@
 # /usr/bin/env python3
-import requests
 import json
-import numpy as np
 import os
 import git
 import subprocess
-from shutil import copyfile
-# noinspection PyUnresolvedReferences
+
 from ground.common.model.core.node import Node
-# noinspection PyUnresolvedReferences
 from ground.common.model.core.node_version import NodeVersion
-# noinspection PyUnresolvedReferences
 from ground.common.model.core.edge import Edge
-# noinspection PyUnresolvedReferences
 from ground.common.model.core.edge_version import EdgeVersion
-# noinspection PyUnresolvedReferences
 from ground.common.model.core.graph import Graph
-# noinspection PyUnresolvedReferences
 from ground.common.model.core.graph_version import GraphVersion
-# noinspection PyUnresolvedReferences
 from ground.common.model.core.structure import Structure
-# noinspection PyUnresolvedReferences
 from ground.common.model.core.structure_version import StructureVersion
-# noinspection PyUnresolvedReferences
 from ground.common.model.usage.lineage_edge import LineageEdge
-# noinspection PyUnresolvedReferences
 from ground.common.model.usage.lineage_edge_version import LineageEdgeVersion
-# noinspection PyUnresolvedReferences
 from ground.common.model.usage.lineage_graph import LineageGraph
-# noinspection PyUnresolvedReferences
 from ground.common.model.usage.lineage_graph_version import LineageGraphVersion
-# noinspection PyUnresolvedReferences
 from ground.common.model.version.tag import Tag
 
-"""
-Abstract class: do not instantiate
-"""
-
-
-class GroundAPI:
-    headers = {"Content-type": "application/json"}
-
-    ### EDGES ###
-    def createEdge(self, sourceKey, fromNodeId, toNodeId, name="null", tags=None):
-        d = {
-            "sourceKey": sourceKey,
-            "fromNodeId": fromNodeId,
-            "toNodeId": toNodeId,
-            "name": name
-        }
-        if tags is not None:
-            d["tags"] = tags
-        return d
-
-    def createEdgeVersion(self, edgeId, toNodeVersionStartId, fromNodeVersionStartId, toNodeVersionEndId=None,
-                          fromNodeVersionEndId=None, reference=None, referenceParameters=None, tags=None,
-                          structureVersionId=None, parentIds=None):
-        d = {
-            "edgeId": edgeId,
-            "fromNodeVersionStartId": fromNodeVersionStartId,
-            "toNodeVersionStartId": toNodeVersionStartId
-        }
-        if toNodeVersionEndId is not None:
-            d["toNodeVersionEndId"] = toNodeVersionEndId
-        if fromNodeVersionEndId is not None:
-            d["fromNodeVersionEndId"] = fromNodeVersionEndId
-        if reference is not None:
-            d["reference"] = reference
-        if referenceParameters is not None:
-            d["referenceParameters"] = referenceParameters
-        if tags is not None:
-            d["tags"] = tags
-        if structureVersionId is not None:
-            d["structureVersionId"] = structureVersionId
-        if parentIds is not None:
-            d["parentIds"] = parentIds
-        return d
-
-    def getEdge(self, sourceKey):
-        raise NotImplementedError("Invalid call to GroundClient.getEdge")
-
-    def getEdgeLatestVersions(self, sourceKey):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getEdgeLatestVersions")
-
-    def getEdgeHistory(self, sourceKey):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getEdgeHistory")
-
-    def getEdgeVersion(self, edgeId):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getEdgeVersion")
-
-    ### NODES ###
-    def createNode(self, sourceKey, name="null", tags=None):
-        d = {
-            "sourceKey": sourceKey,
-            "name": name
-        }
-        if tags is not None:
-            d["tags"] = tags
-        return d
-
-    def createNodeVersion(self, nodeId, reference=None, referenceParameters=None, tags=None,
-                          structureVersionId=None, parentIds=None):
-        d = {
-            "nodeId": nodeId
-        }
-        if reference is not None:
-            d["reference"] = reference
-        if referenceParameters is not None:
-            d["referenceParameters"] = referenceParameters
-        if tags is not None:
-            d["tags"] = tags
-        if structureVersionId is not None:
-            d["structureVersionId"] = structureVersionId
-        if parentIds is not None:
-            d["parentIds"] = parentIds
-        return d
-
-    def getNode(self, sourceKey):
-        raise NotImplementedError("Invalid call to GroundClient.getNode")
-
-    def getNodeLatestVersions(self, sourceKey):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getNodeLatestVersions")
-
-    def getNodeHistory(self, sourceKey):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getNodeHistory")
-
-    def getNodeVersion(self, nodeId):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getNodeVersion")
-
-    def getNodeVersionAdjacentLineage(self, nodeId):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getNodeVersionAdjacentLineage")
-
-    ### GRAPHS ###
-    def createGraph(self, sourceKey, name="null", tags=None):
-        d = {
-            "sourceKey": sourceKey,
-            "name": name
-        }
-        if tags is not None:
-            d["tags"] = tags
-        return d
-
-    def createGraphVersion(self, graphId, edgeVersionIds, reference=None, referenceParameters=None,
-                           tags=None, structureVersionId=None, parentIds=None):
-        d = {
-            "graphId": graphId,
-            "edgeVersionIds": edgeVersionIds
-        }
-        if reference is not None:
-            d["reference"] = reference
-        if referenceParameters is not None:
-            d["referenceParameters"] = referenceParameters
-        if tags is not None:
-            d["tags"] = tags
-        if structureVersionId is not None:
-            d["structureVersionId"] = structureVersionId
-        if parentIds is not None:
-            d["parentIds"] = parentIds
-        return d
-
-    def getGraph(self, sourceKey):
-        raise NotImplementedError("Invalid call to GroundClient.getGraph")
-
-    def getGraphLatestVersions(self, sourceKey):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getGraphLatestVersions")
-
-    def getGraphHistory(self, sourceKey):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getGraphHistory")
-
-    def getGraphVersion(self, graphId):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getGraphVersion")
-
-    ### STRUCTURES ###
-    def createStructure(self, sourceKey, name="null", tags=None):
-        d = {
-            "sourceKey": sourceKey,
-            "name": name
-        }
-        if tags is not None:
-            d["tags"] = tags
-        return d
-
-    def createStructureVersion(self, structureId, attributes, parentIds=None):
-        d = {
-            "structureId": structureId,
-            "attributes": attributes
-        }
-        if parentIds is not None:
-            d["parentIds"] = parentIds
-        return d
-
-    def getStructure(self, sourceKey):
-        raise NotImplementedError("Invalid call to GroundClient.getStructure")
-
-    def getStructureLatestVersions(self, sourceKey):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getStructureLatestVersions")
-
-    def getStructureHistory(self, sourceKey):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getStructureHistory")
-
-    def getStructureVersion(self, structureId):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getStructureVersion")
-
-    ### LINEAGE EDGES ###
-    def createLineageEdge(self, sourceKey, name="null", tags=None):
-        d = {
-            "sourceKey": sourceKey,
-            "name": name
-        }
-        if tags is not None:
-            d["tags"] = tags
-        return d
-
-    def createLineageEdgeVersion(self, lineageEdgeId, toRichVersionId, fromRichVersionId, reference=None,
-                                 referenceParameters=None, tags=None, structureVersionId=None, parentIds=None):
-        d = {
-            "lineageEdgeId": lineageEdgeId,
-            "toRichVersionId": toRichVersionId,
-            "fromRichVersionId": fromRichVersionId
-        }
-        if reference is not None:
-            d["reference"] = reference
-        if referenceParameters is not None:
-            d["referenceParameters"] = referenceParameters
-        if tags is not None:
-            d["tags"] = tags
-        if structureVersionId is not None:
-            d["structureVersionId"] = structureVersionId
-        if parentIds is not None:
-            d["parentIds"] = parentIds
-        return d
-
-    def getLineageEdge(self, sourceKey):
-        raise NotImplementedError("Invalid call to GroundClient.getLineageEdge")
-
-    def getLineageEdgeLatestVersions(self, sourceKey):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getLineageEdgeLatestVersions")
-
-    def getLineageEdgeHistory(self, sourceKey):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getLineageEdgeHistory")
-
-    def getLineageEdgeVersion(self, lineageEdgeId):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getLineageEdgeVersion")
-
-    ### LINEAGE GRAPHS ###
-    def createLineageGraph(self, sourceKey, name="null", tags=None):
-        d = {
-            "sourceKey": sourceKey,
-            "name": name
-        }
-        if tags is not None:
-            d["tags"] = tags
-        return d
-
-    def createLineageGraphVersion(self, lineageGraphId, lineageEdgeVersionIds, reference=None,
-                                  referenceParameters=None, tags=None, structureVersionId=None, parentIds=None):
-        d = {
-            "lineageGraphId": lineageGraphId,
-            "lineageEdgeVersionIds": lineageEdgeVersionIds
-        }
-        if reference is not None:
-            d["reference"] = reference
-        if referenceParameters is not None:
-            d["referenceParameters"] = referenceParameters
-        if tags is not None:
-            d["tags"] = tags
-        if structureVersionId is not None:
-            d["structureVersionId"] = structureVersionId
-        if parentIds is not None:
-            d["parentIds"] = parentIds
-        return d
-
-    def getLineageGraph(self, sourceKey):
-        raise NotImplementedError("Invalid call to GroundClient.getLineageGraph")
-
-    def getLineageGraphLatestVersions(self, sourceKey):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getLineageGraphLatestVersions")
-
-    def getLineageGraphHistory(self, sourceKey):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getLineageGraphHistory")
-
-    def getLineageGraphVersion(self, lineageGraphId):
-        raise NotImplementedError(
-            "Invalid call to GroundClient.getLineageGraphVersion")
-
-class GitImplementation(GroundAPI):
+class GitImplementation():
     def __init__(self):
-        #self.nodes = {}
-        #self.nodeVersions = {}
-        #self.edges = {}
-        #self.edgeVersions = {}
-        #self.graphs = {}
-        #self.graphVersions = {}
-        #self.structures = {}
-        #self.structureVersions = {}
-        #self.lineageEdges = {}
-        #self.lineageEdgeVersions = {}
-        #self.lineageGraphs = {}
-        #self.lineageGraphVersions = {}
-        #self.ids = set([])
-
         self.initialized = False
-        #if(path and (path[-1] != '/')):
-        #    path = path + '/'
         self.path = "ground_git_dir/"
-        #if relative:
-        #    self.path = os.path.join(os.getcwd(), self.path)
-        #self.repo = None
 
     def _get_rich_version_json(self, item_type, reference, reference_parameters,
                                tags, structure_version_id, parent_ids):
@@ -491,8 +188,6 @@ class GitImplementation(GroundAPI):
             body["toNodeId"] = toNodeId
             edge = Edge(body)
             edgeId = edge.get_id()
-            #self.edges[sourceKey] = edge
-            #self.edges[edgeId] = edge
             write = self._deconstruct_item(edge)
             write["fromNodeId"] = edge.get_from_node_id()
             write["toNodeId"] = edge.get_to_node_id()
@@ -577,8 +272,6 @@ class GitImplementation(GroundAPI):
             body = self._create_item(Node.__name__, sourceKey, name, tags)
             node = Node(body)
             nodeId = node.get_item_id()
-            #self.nodes[sourceKey] = node
-            #self.nodes[nodeId] = node
             write = self._deconstruct_item(node)
             self._write_files(nodeId, write)
             self._commit(nodeId, Node.__name__)
@@ -598,8 +291,6 @@ class GitImplementation(GroundAPI):
 
         nodeVersion = NodeVersion(body)
         nodeVersionId = nodeVersion.get_id()
-
-        #self.nodeVersions[nodeVersionId] = nodeVersion
 
         write = self._deconstruct_rich_version_json(body)
         self._write_files(nodeVersionId, write)
@@ -665,8 +356,6 @@ class GitImplementation(GroundAPI):
             body = self._create_item(Graph.__name__, sourceKey, name, tags)
             graph = Graph(body)
             graphId = graph.get_item_id()
-            #self.graphs[sourceKey] = graph
-            #self.graphs[graphId] = graph
             write = self._deconstruct_item(graph)
             self._write_files(graphId, write)
             self._commit(graphId, Graph.__name__)
@@ -688,8 +377,6 @@ class GitImplementation(GroundAPI):
 
         graphVersion = GraphVersion(body)
         graphVersionId = graphVersion.get_id()
-
-        #self.graphVersions[graphVersionId] = graphVersion
 
         write = self._deconstruct_rich_version_json(body)
         self._write_files(graphVersionId, write)
@@ -741,8 +428,6 @@ class GitImplementation(GroundAPI):
             body = self._create_item(Structure.__name__, sourceKey, name, tags)
             structure = Structure(body)
             structureId = structure.get_item_id()
-            #self.structures[sourceKey] = structure
-            #self.structures[structureId] = structure
             write = self._deconstruct_item(structure)
             self._write_files(structureId, write)
             self._commit(structureId, Structure.__name__)
@@ -767,8 +452,6 @@ class GitImplementation(GroundAPI):
 
         structureVersion = StructureVersion(body)
         structureVersionId = structureVersion.get_id()
-
-        #self.structureVersions[structureVersionId] = structureVersion
 
         write = dict(body)
         self._write_files(structureVersionId, write)
@@ -821,8 +504,6 @@ class GitImplementation(GroundAPI):
             body = self._create_item(LineageEdge.__name__, sourceKey, name, tags)
             lineageEdge = LineageEdge(body)
             lineageEdgeId = lineageEdge.get_id()
-            #self.lineageEdges[sourceKey] = lineageEdge
-            #self.lineageEdges[lineageEdgeId] = lineageEdge
             write = self._deconstruct_item(lineageEdge)
             self._write_files(lineageEdgeId, write)
             self._commit(lineageEdgeId, LineageEdge.__name__)
@@ -845,8 +526,6 @@ class GitImplementation(GroundAPI):
 
         lineageEdgeVersion = LineageEdgeVersion(body)
         lineageEdgeVersionId = lineageEdgeVersion.get_id()
-
-        #self.lineageEdgeVersions[lineageEdgeVersionId] = lineageEdgeVersion
 
         write = self._deconstruct_rich_version_json(body)
         self._write_files(lineageEdgeVersionId, write)
@@ -898,8 +577,6 @@ class GitImplementation(GroundAPI):
             body = self._create_item(LineageGraph.__name__, sourceKey, name, tags)
             lineageGraph = LineageGraph(body)
             lineageGraphId = lineageGraph.get_id()
-            #self.lineageGraphs[sourceKey] = lineageGraph
-            #self.lineageGraphs[lineageGraphId] = lineageGraph
             write = self._deconstruct_item(lineageGraph)
             self._write_files(lineageGraphId, write)
             self._commit(lineageGraphId, LineageGraph.__name__)
@@ -921,8 +598,6 @@ class GitImplementation(GroundAPI):
 
         lineageGraphVersion = LineageGraphVersion(body)
         lineageGraphVersionId = lineageGraphVersion.get_id()
-
-        #self.lineageGraphVersions[lineageGraphVersionId] = lineageGraphVersion
 
         write = self._deconstruct_rich_version_json(body)
         self._write_files(lineageGraphVersionId, write)
@@ -966,91 +641,3 @@ class GitImplementation(GroundAPI):
     def getLineageGraphVersion(self, lineageGraphVersionId):
         self._check_init()
         return self._read_version(lineageGraphVersionId, LineageGraphVersion.__name__)
-
-    """
-    def commit(self):
-        stage = []
-        for kee in self.graph.ids:
-            if kee in self.graph.nodes:
-                serial = self.graph.nodes[kee].to_json()
-            elif kee in self.graph.nodeVersions:
-                serial = self.graph.nodeVersions[kee].to_json()
-            elif kee in self.graph.edges:
-                serial = self.graph.edges[kee].to_json()
-            elif kee in self.graph.edgeVersions:
-                serial = self.graph.edgeVersions[kee].to_json()
-            elif kee in self.graph.graphs:
-                serial = self.graph.graphs[kee].to_json()
-            elif kee in self.graph.graphVersions:
-                serial = self.graph.graphVersions[kee].to_json()
-            elif kee in self.graph.structures:
-                serial = self.graph.structures[kee].to_json()
-            elif kee in self.graph.structureVersions:
-                serial = self.graph.structureVersions[kee].to_json()
-            elif kee in self.graph.lineageEdges:
-                serial = self.graph.lineageEdges[kee].to_json()
-            elif kee in self.graph.lineageEdgeVersions:
-                serial = self.graph.lineageEdgeVersions[kee].to_json()
-            elif kee in self.graph.lineageGraphs:
-                serial = self.graph.lineageGraphs[kee].to_json()
-            else:
-                serial = self.graph.lineageGraphVersions[kee].to_json()
-            assert serial is not None
-            with open(str(kee) + '.json', 'w') as f:
-                f.write(serial)
-            stage.append(str(kee) + '.json')
-        repo = git.Repo.init(os.getcwd())
-        repo.index.add(stage)
-        repo.index.commit("ground commit")
-        tree = repo.tree()
-        with open('.jarvis', 'w') as f:
-            for obj in tree:
-                commithash = self.__run_proc__("git log " + obj.path).replace('\n', ' ').split()[1]
-                if obj.path != '.jarvis':
-                    f.write(obj.path + " " + commithash + "\n")
-        repo.index.add(['.jarvis'])
-        repo.index.commit('.jarvis commit')
-
-    def load(self):
-        if self.graph.ids:
-            return
-        os.chdir('../')
-
-        def is_number(s):
-            try:
-                float(s)
-                return True
-            except ValueError:
-                return False
-
-        listdir = [x for x in filter(is_number, os.listdir())]
-
-        prevDir = str(len(listdir) - 1)
-        os.chdir(prevDir)
-        for _, _, filenames in os.walk('.'):
-            for filename in filenames:
-                filename = filename.split('.')
-                if filename[-1] == 'json':
-                    filename = '.'.join(filename)
-                    with open(filename, 'r') as f:
-                        self.to_class(json.loads(f.read()))
-        os.chdir('../' + str(int(prevDir) + 1))
-    """
-
-class GroundImplementation(GroundAPI):
-    def __init__(self, host='localhost', port=9000):
-        self.host = host
-        self.port = str(port)
-        self.url = "http://" + self.host + ":" + self.port
-
-
-class GroundClient(GroundAPI):
-    def __new__(*args, **kwargs):
-        if args and args[1].strip().lower() == 'git':
-            return GitImplementation(**kwargs)
-        elif args and args[1].strip().lower() == 'ground':
-            # EXAMPLE CALL: GroundClient('ground', host='localhost', port=9000)
-            return GroundImplementation(**kwargs)
-        else:
-            raise ValueError(
-                "Backend not supported. Please choose 'git' or 'ground'")
