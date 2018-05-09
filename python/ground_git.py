@@ -85,74 +85,114 @@ class GitImplementation():
     def _gen_id(self):
         with open(self.path + 'ids.json', 'r') as f:
             ids = json.loads(f.read())
-        newid = ids['latest_id'] + 1
-        ids['latest_id'] = newid
+        newid = (ids['running_id'])['latest_id'] + 1
+        ids['running_id']['latest_id'] = newid
         self._write_files('ids', ids)
         return newid
 
     def _write_files(self, id, body):
         with open(self.path + str(id) + '.json', 'w') as f:
             f.write(json.dumps(body))
+        if(id != 'ids' and ("Version" not in body["class"])):
+            with open(self.path + 'ids.json', 'r') as f_two:
+                ids = json.loads(f_two.read())
+            sourceKey = body["sourceKey"]
+            bodyClass = body["class"]
+            ids["sourceId"][bodyClass][sourceKey] = id
+            with open(self.path + 'ids.json', 'w') as f_three:
+                f_three.write(json.dumps(ids))
+        elif(id != 'ids' and ("Version" in body["class"])):
+            with open(self.path + 'ids.json', 'r') as f_four:
+                ids = json.loads(f_four.read())
+            bodyClass = body["class"]
+            specId = ""
+            if(bodyClass == self.names['nodeVersion']):
+                specId = body['nodeId']
+            elif (bodyClass == self.names['edgeVersion']):
+                specId = body['edgeId']
+            elif (bodyClass == self.names['graphVersion']):
+                specId = body['graphId']
+            elif (bodyClass == self.names['structureVersion']):
+                specId = body['structureId']
+            elif (bodyClass == self.names['lineageEdgeVersion']):
+                specId = body['lineageEdgeId']
+            elif (bodyClass == self.names['lineageGraphVersion']):
+                specId = body['lineageGraphId']
+
+            with open(self.path + str(specId) + '.json', 'r') as f_five:
+                base = json.loads(f_five.read())
+            sourceKey = base["sourceKey"]
+
+            if(bodyClass == self.names['nodeVersion']):
+                ids["adjacentLineageEdgeVersions"][id] = []
+            if (bodyClass == self.names['lineageEdgeVersion']):
+                toRich = body["toRichVersionId"]
+                fromRich = body["fromRichVersionId"]
+                if(str(toRich) in ids["adjacentLineageEdgeVersions"]):
+                    ids["adjacentLineageEdgeVersions"][str(toRich)].append(id)
+                if(str(fromRich) in ids["adjacentLineageEdgeVersions"]):
+                    ids["adjacentLineageEdgeVersions"][str(fromRich)].append(id)
+            
+            if(sourceKey not in ids["latestVersion"][bodyClass]):
+                ids["latestVersion"][bodyClass][sourceKey] = [id]
+            else:
+                ids["latestVersion"][bodyClass][sourceKey].append(id)
+                if("parentIds" in body):
+                    parentIds = body["parentIds"]
+                    latestIdsSet = set(ids["latestVersion"][bodyClass][sourceKey])
+                    for parentId in parentIds:
+                        if(parentId in latestIdsSet):
+                            ids["latestVersion"][bodyClass][sourceKey].remove(parentId)
+
+            if(sourceKey not in ids["history"][bodyClass]):
+                ids["history"][bodyClass][sourceKey] = {}
+            sourceHistory = ids["history"][bodyClass][sourceKey]
+            if (not sourceHistory):
+                ids["history"][bodyClass][sourceKey][str(specId)] = id
+            if("parentIds"in body):
+                parentIds = body["parentIds"]
+                for parentId in parentIds:
+                    ids["history"][bodyClass][sourceKey][str(parentId)] = id
+
+            with open(self.path + 'ids.json', 'w') as f_six:
+                f_six.write(json.dumps(ids))
 
     def _read_files(self, sourceKey, className):
-        files = [f for f in os.listdir(self.path) if os.path.isfile(os.path.join(self.path, f))]
-        for file in files:
-            filename = file.split('.')
-            if (filename[-1] == 'json') and (filename[0] != 'ids'):
-                with open(self.path + file, 'r') as f:
-                    fileDict = json.loads(f.read())
-                    if (('sourceKey' in fileDict) and (fileDict['sourceKey'] == sourceKey)
-                        and (fileDict['class'] == className)):
-                        return fileDict
+        with open(self.path + 'ids.json', 'r') as idFile:
+            ids = json.loads(idFile.read())
+        fileId = ids["sourceId"][className][sourceKey]
+        with open(self.path + str(fileId) + '.json', 'r') as f:
+            object = json.loads(f.read())
+        return object
 
     def _read_version(self, id, className):
-        files = [f for f in os.listdir(self.path) if os.path.isfile(os.path.join(self.path, f))]
-        for file in files:
-            filename = file.split('.')
-            if (filename[-1] == 'json') and (filename[0] == str(id)):
-                with open(self.path + file, 'r') as f:
-                    fileDict = json.loads(f.read())
-                    if (fileDict['class'] == className):
-                        return fileDict
+        with open(self.path + str(id) + '.json', 'r') as f:
+            fileDict = json.loads(f.read())
+        return fileDict
 
-    def _read_all_version(self, sourceKey, className, baseClassName):
-        baseId = (self._read_files(sourceKey, baseClassName))['id']
-        baseIdName = baseClassName[:1].lower() + baseClassName[1:] + "Id"
+    def _read_latest_versions(self, sourceKey, className):
+        with open(self.path + 'ids.json', 'r') as f:
+            ids = json.loads(f.read())
+        latestVersions = ids["latestVersion"][className][sourceKey]
+        return [self._read_version(id, className) for id in latestVersions]
 
-        versions = {}
-        files = [f for f in os.listdir(self.path) if os.path.isfile(os.path.join(self.path, f))]
-        for file in files:
-            filename = file.split('.')
-            if (filename[-1] == 'json') and (filename[0] != 'ids'):
-                with open(self.path + file, 'r') as f:
-                    fileDict = json.loads(f.read())
-                    if ((baseIdName in fileDict) and (fileDict[baseIdName] == baseId)
-                        and (fileDict['class'] == className)):
-                        versions[fileDict['id']] = fileDict
-        return versions
+    def _read_history(self, sourceKey, className):
+        with open(self.path + 'ids.json', 'r') as f:
+            ids = json.loads(f.read())
+        history = ids["history"][className][sourceKey]
+        return history
 
-    def _read_all_version_ever(self, className):
-        versions = {}
-        files = [f for f in os.listdir(self.path) if os.path.isfile(os.path.join(self.path, f))]
-        for file in files:
-            filename = file.split('.')
-            if (filename[-1] == 'json') and (filename[0] != 'ids'):
-                with open(self.path + file, 'r') as f:
-                    fileDict = json.loads(f.read())
-                    if (fileDict['class'] == className):
-                        versions[fileDict['id']] = fileDict
-        return versions
+    def _read_all_lineage_edge_versions(self, nodeVersionId):
+        with open(self.path + 'ids.json', 'r') as f:
+            ids = json.loads(f.read())
+        adjacentVersions = ids["adjacentLineageEdgeVersions"][str(nodeVersionId)]
+        return [self._read_version(id, self.names['lineageEdgeVersion']) for id in adjacentVersions]
 
     def _find_file(self, sourceKey, className):
-        files = [f for f in os.listdir(self.path) if os.path.isfile(os.path.join(self.path, f))]
-        for file in files:
-            filename = file.split('.')
-            if (filename[-1] == 'json') and (filename[0] != 'ids'):
-                with open(self.path + file, 'r') as f:
-                    fileDict = json.loads(f.read())
-                    if (('sourceKey' in fileDict) and (fileDict['sourceKey'] == sourceKey)
-                        and (fileDict['class'] == className)):
-                        return True
+        with open(self.path + 'ids.json', 'r') as f:
+            ids = json.loads(f.read())
+        if(sourceKey in ids["sourceId"][className]):
+            return True
         return False
 
     def __run_proc__(self, bashCommand):
@@ -169,7 +209,21 @@ class GitImplementation():
             os.mkdir(self.path)
         if not os.path.exists(self.path + 'ids.json'):
             with open(self.path + 'ids.json', 'w') as f:
-                f.write(json.dumps({'latest_id': 0}))
+                f.write(json.dumps({'running_id': {'latest_id': 0},
+                                    'sourceId' : {self.names['node']: {}, self.names['edge']: {},
+                                                  self.names['graph']: {}, self.names['structure']: {},
+                                                  self.names['lineageEdge']: {}, self.names['lineageGraph']: {}},
+                                    'adjacentLineageEdgeVersions': {},
+                                    'latestVersion': {self.names['nodeVersion']: {}, self.names['edgeVersion']: {},
+                                                       self.names['graphVersion']: {},
+                                                       self.names['structureVersion']: {},
+                                                       self.names['lineageEdgeVersion']: {},
+                                                       self.names['lineageGraphVersion']: {}},
+                                    'history': {self.names['nodeVersion']: {}, self.names['edgeVersion']: {},
+                                                      self.names['graphVersion']: {},
+                                                      self.names['structureVersion']: {},
+                                                      self.names['lineageEdgeVersion']: {},
+                                                      self.names['lineageGraphVersion']: {}}}))
         self.repo = git.Repo.init(self.path)
         if not os.path.exists(self.path + '.gitignore'):
             with open(self.path + '.gitignore', 'w') as f:
@@ -238,32 +292,13 @@ class GitImplementation():
 
     def getEdgeLatestVersions(self, sourceKey):
         self._check_init()
-        edgeVersionMap = self._read_all_version(sourceKey, self.names['edgeVersion'], self.names['edge'])
-        edgeVersions = set(list(edgeVersionMap.keys()))
-        is_parent = set([])
-        for evId in edgeVersions:
-            ev = edgeVersionMap[evId]
-            if ('parentIds' in ev) and (ev['parentIds']):
-                assert type(ev['parentIds']) == list
-                for parentId in ev['parentIds']:
-                    is_parent |= {parentId, }
-        return [edgeVersionMap[Id] for Id in list(edgeVersions - is_parent)]
+        latest = self._read_latest_versions(sourceKey, self.names['edgeVersion'])
+        return latest
 
     def getEdgeHistory(self, sourceKey):
         self._check_init()
-        edgeVersionMap = self._read_all_version(sourceKey, self.names['edgeVersion'], self.names['edge'])
-        edgeVersions = set(list(edgeVersionMap.keys()))
-        parentChild = {}
-        for evId in edgeVersions:
-            ev = edgeVersionMap[evId]
-            if ('parentIds' in ev) and (ev['parentIds']):
-                assert type(ev['parentIds']) == list
-                for parentId in ev['parentIds']:
-                    if not parentChild:
-                        edgeId = ev['edgeId']
-                        parentChild[str(edgeId)] = parentId
-                    parentChild[str(parentId)] = ev['id']
-        return parentChild
+        history = self._read_history(sourceKey, self.names['edgeVersion'])
+        return history
 
     def getEdgeVersion(self, edgeVersionId):
         self._check_init()
@@ -309,32 +344,13 @@ class GitImplementation():
 
     def getNodeLatestVersions(self, sourceKey):
         self._check_init()
-        nodeVersionMap = self._read_all_version(sourceKey, self.names['nodeVersion'], self.names['node'])
-        nodeVersions = set(list(nodeVersionMap.keys()))
-        is_parent = set([])
-        for evId in nodeVersions:
-            ev = nodeVersionMap[evId]
-            if ('parentIds' in ev) and (ev['parentIds']):
-                assert type(ev['parentIds']) == list
-                for parentId in ev['parentIds']:
-                    is_parent |= {parentId, }
-        return [nodeVersionMap[Id] for Id in list(nodeVersions - is_parent)]
+        latest = self._read_latest_versions(sourceKey, self.names['nodeVersion'])
+        return latest
 
     def getNodeHistory(self, sourceKey):
         self._check_init()
-        nodeVersionMap = self._read_all_version(sourceKey, self.names['nodeVersion'], self.names['node'])
-        nodeVersions = set(list(nodeVersionMap.keys()))
-        parentChild = {}
-        for evId in nodeVersions:
-            ev = nodeVersionMap[evId]
-            if ('parentIds' in ev) and (ev['parentIds']):
-                assert type(ev['parentIds']) == list
-                for parentId in ev['parentIds']:
-                    if not parentChild:
-                        nodeId = ev['nodeId']
-                        parentChild[str(nodeId)] = parentId
-                    parentChild[str(parentId)] = ev['id']
-        return parentChild
+        history = self._read_history(sourceKey, self.names['nodeVersion'])
+        return history
 
     def getNodeVersion(self, nodeVersionId):
         self._check_init()
@@ -343,15 +359,8 @@ class GitImplementation():
 
     def getNodeVersionAdjacentLineage(self, nodeVersionId):
         self._check_init()
-        lineageEdgeVersionMap = self._read_all_version_ever(self.names['lineageEdgeVersion'])
-        lineageEdgeVersions = set(list(lineageEdgeVersionMap.keys()))
-        adjacent = []
-        for levId in lineageEdgeVersions:
-            lev = lineageEdgeVersionMap[levId]
-            if ((nodeVersionId == lev['toRichVersionId']) or (nodeVersionId == lev['fromRichVersionId'])):
-                adjacent.append(lev)
-        return adjacent
-
+        adjacentLineage = self._read_all_lineage_edge_versions(nodeVersionId)
+        return adjacentLineage
 
     ### GRAPHS ###
     def createGraph(self, sourceKey, name="null", tags=None):
@@ -394,32 +403,13 @@ class GitImplementation():
 
     def getGraphLatestVersions(self, sourceKey):
         self._check_init()
-        graphVersionMap = self._read_all_version(sourceKey, self.names['graphVersion'], self.names['graph'])
-        graphVersions = set(list(graphVersionMap.keys()))
-        is_parent = set([])
-        for evId in graphVersions:
-            ev = graphVersionMap[evId]
-            if ('parentIds' in ev) and (ev['parentIds']):
-                assert type(ev['parentIds']) == list
-                for parentId in ev['parentIds']:
-                    is_parent |= {parentId, }
-        return [graphVersionMap[Id] for Id in list(graphVersions - is_parent)]
+        latest = self._read_latest_versions(sourceKey, self.names['graphVersion'])
+        return latest
 
     def getGraphHistory(self, sourceKey):
         self._check_init()
-        graphVersionMap = self._read_all_version(sourceKey, self.names['graphVersion'], self.names['graph'])
-        graphVersions = set(list(graphVersionMap.keys()))
-        parentChild = {}
-        for evId in graphVersions:
-            ev = graphVersionMap[evId]
-            if ('parentIds' in ev) and (ev['parentIds']):
-                assert type(ev['parentIds']) == list
-                for parentId in ev['parentIds']:
-                    if not parentChild:
-                        graphId = ev['graphId']
-                        parentChild[str(graphId)] = parentId
-                    parentChild[str(parentId)] = ev['id']
-        return parentChild
+        history = self._read_history(sourceKey, self.names['graphVersion'])
+        return history
 
     def getGraphVersion(self, graphVersionId):
         self._check_init()
@@ -469,32 +459,13 @@ class GitImplementation():
 
     def getStructureLatestVersions(self, sourceKey):
         self._check_init()
-        structureVersionMap = self._read_all_version(sourceKey, self.names['structureVersion'], self.names['structure'])
-        structureVersions = set(list(structureVersionMap.keys()))
-        is_parent = set([])
-        for evId in structureVersions:
-            ev = structureVersionMap[evId]
-            if ('parentIds' in ev) and (ev['parentIds']):
-                assert type(ev['parentIds']) == list
-                for parentId in ev['parentIds']:
-                    is_parent |= {parentId, }
-        return [structureVersionMap[Id] for Id in list(structureVersions - is_parent)]
+        latest = self._read_latest_versions(sourceKey, self.names['structureVersion'])
+        return latest
 
     def getStructureHistory(self, sourceKey):
         self._check_init()
-        structureVersionMap = self._read_all_version(sourceKey, self.names['structureVersion'], self.names['structure'])
-        structureVersions = set(list(structureVersionMap.keys()))
-        parentChild = {}
-        for evId in structureVersions:
-            ev = structureVersionMap[evId]
-            if ('parentIds' in ev) and (ev['parentIds']):
-                assert type(ev['parentIds']) == list
-                for parentId in ev['parentIds']:
-                    if not parentChild:
-                        structureId = ev['structureId']
-                        parentChild[str(structureId)] = parentId
-                    parentChild[str(parentId)] = ev['id']
-        return parentChild
+        history = self._read_history(sourceKey, self.names['structureVersion'])
+        return history
 
     def getStructureVersion(self, structureVersionId):
         self._check_init()
@@ -543,32 +514,13 @@ class GitImplementation():
 
     def getLineageEdgeLatestVersions(self, sourceKey):
         self._check_init()
-        lineageEdgeVersionMap = self._read_all_version(sourceKey, self.names['lineageEdgeVersion'], self.names['lineageEdge'])
-        lineageEdgeVersions = set(list(lineageEdgeVersionMap.keys()))
-        is_parent = set([])
-        for evId in lineageEdgeVersions:
-            ev = lineageEdgeVersionMap[evId]
-            if ('parentIds' in ev) and (ev['parentIds']):
-                assert type(ev['parentIds']) == list
-                for parentId in ev['parentIds']:
-                    is_parent |= {parentId, }
-        return [lineageEdgeVersionMap[Id] for Id in list(lineageEdgeVersions - is_parent)]
+        latest = self._read_latest_versions(sourceKey, self.names['lineageEdgeVersion'])
+        return latest
 
     def getLineageEdgeHistory(self, sourceKey):
         self._check_init()
-        lineageEdgeVersionMap = self._read_all_version(sourceKey, self.names['lineageEdgeVersion'], self.names['lineageEdge'])
-        lineageEdgeVersions = set(list(lineageEdgeVersionMap.keys()))
-        parentChild = {}
-        for evId in lineageEdgeVersions:
-            ev = lineageEdgeVersionMap[evId]
-            if ('parentIds' in ev) and (ev['parentIds']):
-                assert type(ev['parentIds']) == list
-                for parentId in ev['parentIds']:
-                    if not parentChild:
-                        lineageEdgeId = ev['lineageEdgeId']
-                        parentChild[str(lineageEdgeId)] = parentId
-                    parentChild[str(parentId)] = ev['id']
-        return parentChild
+        history = self._read_history(sourceKey, self.names['lineageEdgeVersion'])
+        return history
 
     def getLineageEdgeVersion(self, lineageEdgeVersionId):
         self._check_init()
@@ -615,32 +567,13 @@ class GitImplementation():
 
     def getLineageGraphLatestVersions(self, sourceKey):
         self._check_init()
-        lineageGraphVersionMap = self._read_all_version(sourceKey, self.names['lineageGraphVersion'], self.names['lineageGraph'])
-        lineageGraphVersions = set(list(lineageGraphVersionMap.keys()))
-        is_parent = set([])
-        for evId in lineageGraphVersions:
-            ev = lineageGraphVersionMap[evId]
-            if ('parentIds' in ev) and (ev['parentIds']):
-                assert type(ev['parentIds']) == list
-                for parentId in ev['parentIds']:
-                    is_parent |= {parentId, }
-        return [lineageGraphVersionMap[Id] for Id in list(lineageGraphVersions - is_parent)]
+        latest = self._read_latest_versions(sourceKey, self.names['lineageGraphVersion'])
+        return latest
 
     def getLineageGraphHistory(self, sourceKey):
         self._check_init()
-        lineageGraphVersionMap = self._read_all_version(sourceKey, self.names['lineageGraphVersion'], self.names['lineageGraph'])
-        lineageGraphVersions = set(list(lineageGraphVersionMap.keys()))
-        parentChild = {}
-        for evId in lineageGraphVersions:
-            ev = lineageGraphVersionMap[evId]
-            if ('parentIds' in ev) and (ev['parentIds']):
-                assert type(ev['parentIds']) == list
-                for parentId in ev['parentIds']:
-                    if not parentChild:
-                        lineageGraphId = ev['lineageGraphId']
-                        parentChild[str(lineageGraphId)] = parentId
-                    parentChild[str(parentId)] = ev['id']
-        return parentChild
+        history = self._read_history(sourceKey, self.names['lineageGraphVersion'])
+        return history
 
     def getLineageGraphVersion(self, lineageGraphVersionId):
         self._check_init()
