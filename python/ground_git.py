@@ -41,7 +41,7 @@ class GitImplementation():
         if tags:
             body["tags"] = tags
 
-        if structure_version_id > 0:
+        if structure_version_id:
             body["structureVersionId"] = structure_version_id
 
         if parent_ids:
@@ -51,7 +51,7 @@ class GitImplementation():
 
     def _deconstruct_rich_version_json(self, body):
         bodyRet = dict(body)
-        if bodyRet["tags"]:
+        if "tags" in bodyRet:
             bodyTags = {}
             for key, value in list((bodyRet["tags"]).items()):
                 if isinstance(value, Tag):
@@ -268,10 +268,10 @@ class GitImplementation():
         body["toNodeVersionStartId"] = toNodeVersionStartId
         body["fromNodeVersionStartId"] = fromNodeVersionStartId
 
-        if toNodeVersionEndId > 0:
+        if toNodeVersionEndId:
             body["toNodeVersionEndId"] = toNodeVersionEndId
 
-        if fromNodeVersionEndId > 0:
+        if fromNodeVersionEndId:
             body["fromNodeVersionEndId"] = fromNodeVersionEndId
 
         edgeVersion = EdgeVersion(body)
